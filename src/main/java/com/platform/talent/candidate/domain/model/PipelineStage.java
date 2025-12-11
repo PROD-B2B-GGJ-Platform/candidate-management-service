@@ -1,0 +1,18 @@
+package com.platform.talent.candidate.domain.model;
+
+public enum PipelineStage {
+    APPLIED,
+    SCREENING,
+    PHONE_SCREEN,
+    TECHNICAL_ASSESSMENT,
+    INTERVIEW_SCHEDULED,
+    INTERVIEW_COMPLETED,
+    REFERENCE_CHECK,
+    BACKGROUND_CHECK,
+    OFFER_EXTENDED,
+    OFFER_ACCEPTED,
+    OFFER_REJECTED,
+    REJECTED,
+    WITHDRAWN
+}
+

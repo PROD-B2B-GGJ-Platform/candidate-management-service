@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: candidate-management-service
+  namespace: talent-recruitment-cluster
+  labels:
+    app: candidate-management-service
+    version: 10.0.0.1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: candidate-management-service
+  template:
+    metadata:
+      labels:
+        app: candidate-management-service
+        version: 10.0.0.1
+    spec:
+      containers:
+      - name: candidate-management-service
+        image: ghcr.io/prod-b2b-ggj-platform/candidate-management-service:10.0.0.1
+        ports:
+        - containerPort: 8092
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: talent-recruitment-db-secret
+              key: jdbc-url
+        - name: DATABASE_USER
+          valueFrom:
+            secretKeyRef:
+              name: talent-recruitment-db-secret
+              key: username
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: talent-recruitment-db-secret
+              key: password
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka:9092"
+        - name: ELASTICSEARCH_URL
+          value: "http://elasticsearch:9200"
+        - name: RESUME_PARSER_URL
+          value: "http://ai-resume-parser.ai-cluster:8000"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /api/v1/candidates/health
+            port: 8092
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8092
+          initialDelaySeconds: 30
+          periodSeconds: 5
+

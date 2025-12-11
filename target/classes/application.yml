@@ -1,0 +1,76 @@
+spring:
+  application:
+    name: candidate-management-service
+  
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/talent_recruitment}
+    username: ${DATABASE_USER:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URL:http://localhost:9200}
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+# Integration
+integration:
+  resume-parser:
+    url: ${RESUME_PARSER_URL:http://ai-resume-parser:8000}
+
+# Resilience4j
+resilience4j:
+  circuitbreaker:
+    instances:
+      resumeParser:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        waitDurationInOpenState: 30s
+        failureRateThreshold: 50
+  retry:
+    instances:
+      resumeParser:
+        maxAttempts: 2
+        waitDuration: 2s
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+server:
+  port: ${PORT:8092}
+
+logging:
+  level:
+    root: INFO
+    com.platform.talent: DEBUG
+

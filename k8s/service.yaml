@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: candidate-management-service
+  namespace: talent-recruitment-cluster
+spec:
+  type: ClusterIP
+  selector:
+    app: candidate-management-service
+  ports:
+  - port: 8092
+    targetPort: 8092
+    protocol: TCP
+
