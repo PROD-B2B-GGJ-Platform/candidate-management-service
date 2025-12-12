@@ -1,0 +1,16 @@
+C:\PROJECT_2025\GGJQ4_SPRINT01\B2B_PLATFORM\talent-recruitment-cluster\candidate-management-service\src\main\java\com\platform\talent\candidate\service\CandidateService.java
+C:\PROJECT_2025\GGJQ4_SPRINT01\B2B_PLATFORM\talent-recruitment-cluster\candidate-management-service\src\main\java\com\platform\talent\candidate\domain\repository\CandidateRepository.java
+C:\PROJECT_2025\GGJQ4_SPRINT01\B2B_PLATFORM\talent-recruitment-cluster\candidate-management-service\src\main\java\com\platform\talent\candidate\CandidateManagementApplication.java
+C:\PROJECT_2025\GGJQ4_SPRINT01\B2B_PLATFORM\talent-recruitment-cluster\candidate-management-service\src\main\java\com\platform\talent\candidate\domain\model\PipelineStage.java
+C:\PROJECT_2025\GGJQ4_SPRINT01\B2B_PLATFORM\talent-recruitment-cluster\candidate-management-service\src\main\java\com\platform\talent\candidate\api\controller\CandidateController.java
+C:\PROJECT_2025\GGJQ4_SPRINT01\B2B_PLATFORM\talent-recruitment-cluster\candidate-management-service\src\main\java\com\platform\talent\candidate\service\integration\ResumeParserService.java
+C:\PROJECT_2025\GGJQ4_SPRINT01\B2B_PLATFORM\talent-recruitment-cluster\candidate-management-service\src\main\java\com\platform\talent\candidate\domain\model\CandidateStatus.java
+C:\PROJECT_2025\GGJQ4_SPRINT01\B2B_PLATFORM\talent-recruitment-cluster\candidate-management-service\src\main\java\com\platform\talent\candidate\config\RestTemplateConfig.java
+C:\PROJECT_2025\GGJQ4_SPRINT01\B2B_PLATFORM\talent-recruitment-cluster\candidate-management-service\src\main\java\com\platform\talent\candidate\api\dto\CandidateSearchCriteria.java
+C:\PROJECT_2025\GGJQ4_SPRINT01\B2B_PLATFORM\talent-recruitment-cluster\candidate-management-service\src\main\java\com\platform\talent\candidate\config\CorsConfig.java
+C:\PROJECT_2025\GGJQ4_SPRINT01\B2B_PLATFORM\talent-recruitment-cluster\candidate-management-service\src\main\java\com\platform\talent\candidate\domain\model\Candidate.java
+C:\PROJECT_2025\GGJQ4_SPRINT01\B2B_PLATFORM\talent-recruitment-cluster\candidate-management-service\src\main\java\com\platform\talent\candidate\search\CandidateSearchRepository.java
+C:\PROJECT_2025\GGJQ4_SPRINT01\B2B_PLATFORM\talent-recruitment-cluster\candidate-management-service\src\main\java\com\platform\talent\candidate\service\CandidateSearchService.java
+C:\PROJECT_2025\GGJQ4_SPRINT01\B2B_PLATFORM\talent-recruitment-cluster\candidate-management-service\src\main\java\com\platform\talent\candidate\search\CandidateDocument.java
+C:\PROJECT_2025\GGJQ4_SPRINT01\B2B_PLATFORM\talent-recruitment-cluster\candidate-management-service\src\main\java\com\platform\talent\candidate\api\dto\CreateCandidateRequest.java
+C:\PROJECT_2025\GGJQ4_SPRINT01\B2B_PLATFORM\talent-recruitment-cluster\candidate-management-service\src\main\java\com\platform\talent\candidate\api\dto\CandidateResponse.java
