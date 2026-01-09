@@ -6,6 +6,7 @@ import com.platform.talent.candidate.domain.model.PipelineStage;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -16,7 +17,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface CandidateRepository extends JpaRepository<Candidate, UUID> {
+public interface CandidateRepository extends JpaRepository<Candidate, UUID>, JpaSpecificationExecutor<Candidate> {
 
     Optional<Candidate> findByIdAndTenantId(UUID id, UUID tenantId);
 

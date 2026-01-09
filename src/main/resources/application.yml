@@ -3,15 +3,15 @@ spring:
     name: candidate-management-service
   
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/talent_recruitment}
-    username: ${DATABASE_USER:postgres}
-    password: ${DATABASE_PASSWORD:postgres}
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/gograbjob_b2b}
+    username: ${DATABASE_USER:gograbjob}
+    password: ${DATABASE_PASSWORD:gograbjob_dev_password}
     driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
-      ddl-auto: validate
-    show-sql: false
+      ddl-auto: update
+      show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -19,15 +19,28 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+    locations: classpath:db/migration
+    validate-on-migrate: false
+    clean-disabled: false
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchRestClientAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.elasticsearch.ElasticsearchDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.elasticsearch.ElasticsearchRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
 
   elasticsearch:
     uris: ${ELASTICSEARCH_URL:http://localhost:9200}
+  data:
+    elasticsearch:
+      repositories:
+        enabled: false
 
   servlet:
     multipart:

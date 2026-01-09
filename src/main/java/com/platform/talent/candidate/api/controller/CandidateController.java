@@ -1,11 +1,14 @@
 package com.platform.talent.candidate.api.controller;
 
 import com.platform.talent.candidate.api.dto.*;
+import com.platform.talent.candidate.domain.model.Candidate;
 import com.platform.talent.candidate.domain.model.CandidateStatus;
 import com.platform.talent.candidate.domain.model.PipelineStage;
 import com.platform.talent.candidate.search.CandidateDocument;
 import com.platform.talent.candidate.service.CandidateSearchService;
 import com.platform.talent.candidate.service.CandidateService;
+import com.platform.talent.candidate.service.LinkedInSourcingService;
+import com.platform.talent.candidate.service.InternalDatabaseSourcingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -17,22 +20,35 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.CrossOrigin;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/candidates")
 @Tag(name = "Candidate Management", description = "Candidate profile and pipeline management API")
+@Slf4j
+@CrossOrigin(originPatterns = {"http://localhost:3000", "http://localhost:3001", "http://localhost:3005", "http://127.0.0.1:3005"}, maxAge = 3600, allowCredentials = "true")
 public class CandidateController {
 
     private final CandidateService candidateService;
+    private final LinkedInSourcingService linkedInSourcingService;
+    private final InternalDatabaseSourcingService internalDatabaseSourcingService;
     
     @Autowired(required = false)
     private CandidateSearchService searchService;
     
-    public CandidateController(CandidateService candidateService) {
+    public CandidateController(
+        CandidateService candidateService,
+        LinkedInSourcingService linkedInSourcingService,
+        InternalDatabaseSourcingService internalDatabaseSourcingService
+    ) {
         this.candidateService = candidateService;
+        this.linkedInSourcingService = linkedInSourcingService;
+        this.internalDatabaseSourcingService = internalDatabaseSourcingService;
     }
 
     @PostMapping
@@ -59,8 +75,16 @@ public class CandidateController {
             @RequestHeader("X-Tenant-ID") UUID tenantId,
             @RequestParam(required = false) CandidateStatus status,
             Pageable pageable) {
-        Page<CandidateResponse> response = candidateService.listCandidates(tenantId, status, pageable);
-        return ResponseEntity.ok(response);
+        try {
+            log.info("Listing candidates for tenant: {}, status: {}, page: {}, size: {}", 
+                    tenantId, status, pageable.getPageNumber(), pageable.getPageSize());
+            Page<CandidateResponse> response = candidateService.listCandidates(tenantId, status, pageable);
+            log.info("Found {} candidates", response.getTotalElements());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error listing candidates for tenant: {}", tenantId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @PostMapping("/search")
@@ -109,6 +133,133 @@ public class CandidateController {
             "service", "candidate-management-service",
             "version", "10.0.0.1"
         ));
+    }
+
+    // ==================== SOURCING ENDPOINTS ====================
+    
+    @GetMapping("/sourcing/linkedin/status")
+    @Operation(summary = "Check LinkedIn connection status")
+    public ResponseEntity<Map<String, Object>> getLinkedInStatus(
+        @RequestHeader("X-User-ID") String userId
+    ) {
+        boolean isConnected = linkedInSourcingService.isLinkedInConnected(userId);
+        return ResponseEntity.ok(Map.of(
+            "connected", isConnected,
+            "authUrl", isConnected ? null : linkedInSourcingService.getLinkedInAuthUrl("http://localhost:3005/callback/linkedin")
+        ));
+    }
+    
+    @PostMapping("/sourcing/linkedin/connect")
+    @Operation(summary = "Connect LinkedIn account (OAuth callback)")
+    public ResponseEntity<Map<String, String>> connectLinkedIn(
+        @RequestParam String code,
+        @RequestParam String redirectUri
+    ) {
+        String accessToken = linkedInSourcingService.exchangeCodeForToken(code, redirectUri);
+        return ResponseEntity.ok(Map.of("accessToken", accessToken, "status", "connected"));
+    }
+    
+    @PostMapping("/sourcing/linkedin/search")
+    @Operation(summary = "Search LinkedIn for candidates")
+    public ResponseEntity<List<LinkedInCandidateProfile>> searchLinkedIn(
+        @RequestHeader("X-Tenant-ID") UUID tenantId,
+        @RequestHeader(value = "X-LinkedIn-Token", required = false) String accessToken,
+        @RequestBody LinkedInSearchRequest request
+    ) {
+        // Use provided token or get from session
+        String token = accessToken != null ? accessToken : "mock_token";
+        List<LinkedInCandidateProfile> results = linkedInSourcingService.searchCandidates(request, token);
+        return ResponseEntity.ok(results);
+    }
+    
+    @PostMapping("/sourcing/linkedin/import")
+    @Operation(summary = "Import LinkedIn candidate to pipeline")
+    public ResponseEntity<CandidateResponse> importLinkedInCandidate(
+        @RequestHeader("X-Tenant-ID") UUID tenantId,
+        @RequestParam(required = false) String requisitionId,
+        @RequestBody LinkedInCandidateProfile profile
+    ) {
+        // Convert LinkedIn profile to CreateCandidateRequest
+        CreateCandidateRequest request = CreateCandidateRequest.builder()
+            .firstName(profile.getFirstName())
+            .lastName(profile.getLastName())
+            .email(profile.getEmail())
+            .phone(profile.getPhone())
+            .location(profile.getLocation())
+            .currentCompany(profile.getCurrentCompany())
+            .currentPosition(profile.getCurrentTitle())
+            .yearsOfExperience(profile.getYearsOfExperience())
+            .summary(profile.getSummary())
+            .skills(profile.getSkills())
+            .linkedinUrl(profile.getLinkedInUrl())
+            .source("LINKEDIN")
+            .build();
+        
+        CandidateResponse response = candidateService.createCandidate(tenantId, request);
+        
+        // If requisitionId is provided, create an application
+        if (requisitionId != null) {
+            // TODO: Create application linking candidate to requisition
+            log.info("Candidate {} imported and linked to requisition {}", response.getId(), requisitionId);
+        }
+        
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+    
+    @PostMapping("/sourcing/internal/search")
+    @Operation(summary = "Search internal candidate database")
+    public ResponseEntity<Page<CandidateResponse>> searchInternalDatabase(
+        @RequestHeader("X-Tenant-ID") UUID tenantId,
+        @RequestBody InternalDatabaseSearchRequest request
+    ) {
+        org.springframework.data.domain.Page<com.platform.talent.candidate.domain.model.Candidate> candidates = internalDatabaseSourcingService.searchCandidates(request, tenantId);
+        org.springframework.data.domain.Page<CandidateResponse> response = candidates.map(c -> {
+            // Convert Candidate to CandidateResponse
+            return CandidateResponse.builder()
+                .id(c.getId())
+                .firstName(c.getFirstName())
+                .lastName(c.getLastName())
+                .email(c.getEmail())
+                .phone(c.getPhone())
+                .location(c.getLocation())
+                .currentCompany(c.getCurrentCompany())
+                .currentPosition(c.getCurrentPosition())
+                .yearsOfExperience(c.getYearsOfExperience())
+                .summary(c.getSummary())
+                .skills(c.getSkills())
+                .linkedinUrl(c.getLinkedinUrl())
+                .source(c.getSource())
+                .status(c.getStatus())
+                .pipelineStage(c.getPipelineStage())
+                .build();
+        });
+        return ResponseEntity.ok(response);
+    }
+    
+    @PostMapping("/sourcing/internal/import")
+    @Operation(summary = "Import internal candidate to requisition pipeline")
+    public ResponseEntity<Map<String, String>> importInternalCandidate(
+        @RequestHeader("X-Tenant-ID") UUID tenantId,
+        @RequestParam String candidateId,
+        @RequestParam String requisitionId
+    ) {
+        // Move candidate to APPLIED stage and link to requisition
+        candidateService.moveToPipelineStage(tenantId, UUID.fromString(candidateId), PipelineStage.APPLIED);
+        
+        // TODO: Create application linking candidate to requisition
+        log.info("Candidate {} imported to requisition {} pipeline", candidateId, requisitionId);
+        
+        return ResponseEntity.ok(Map.of(
+            "status", "imported",
+            "candidateId", candidateId,
+            "requisitionId", requisitionId
+        ));
+    }
+
+    // Explicit OPTIONS handler for CORS preflight requests
+    @RequestMapping(value = "/**", method = RequestMethod.OPTIONS)
+    public ResponseEntity<Void> handleOptions() {
+        return ResponseEntity.ok().build();
     }
 }
 

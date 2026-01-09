@@ -60,7 +60,7 @@ public class Candidate {
     @Column(length = 100)
     private String country;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = com.platform.talent.candidate.domain.converter.CandidateStatusConverter.class)
     @Column(nullable = false, length = 50)
     private CandidateStatus status;
 

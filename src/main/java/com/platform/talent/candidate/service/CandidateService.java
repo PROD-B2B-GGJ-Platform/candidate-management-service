@@ -28,17 +28,16 @@ public class CandidateService {
     @Autowired(required = false)
     private CandidateSearchService searchService;
     
-    private final ResumeParserService resumeParserService;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    @Autowired(required = false)
+    private ResumeParserService resumeParserService;
+    
+    @Autowired(required = false)
+    private KafkaTemplate<String, Object> kafkaTemplate;
     
     public CandidateService(
-        CandidateRepository candidateRepository,
-        ResumeParserService resumeParserService,
-        KafkaTemplate<String, Object> kafkaTemplate
+        CandidateRepository candidateRepository
     ) {
         this.candidateRepository = candidateRepository;
-        this.resumeParserService = resumeParserService;
-        this.kafkaTemplate = kafkaTemplate;
     }
 
     @Transactional
@@ -86,8 +85,14 @@ public class CandidateService {
 
         candidate = candidateRepository.save(candidate);
 
-        // Index in Elasticsearch
-        searchService.indexCandidate(candidate);
+        // Index in Elasticsearch if available
+        if (searchService != null) {
+            try {
+                searchService.indexCandidate(candidate);
+            } catch (Exception e) {
+                log.warn("Failed to index candidate in search: {}", candidate.getId(), e);
+            }
+        }
 
         // Publish Kafka event
         publishCandidateEvent("candidate.created", candidate);
@@ -104,7 +109,13 @@ public class CandidateService {
                 .orElseThrow(() -> new RuntimeException("Candidate not found"));
 
         // Parse resume using AI service
-        Map<String, Object> parsedData = resumeParserService.parseResume(candidateId, resume);
+        Map<String, Object> parsedData;
+        if (resumeParserService != null) {
+            parsedData = resumeParserService.parseResume(candidateId, resume);
+        } else {
+            log.warn("ResumeParserService not available, skipping resume parsing");
+            parsedData = Map.of("status", "skipped", "message", "Resume parser service not available");
+        }
         candidate.setResumeData(parsedData);
 
         // Extract and update fields from parsed resume
@@ -120,8 +131,14 @@ public class CandidateService {
 
         candidate = candidateRepository.save(candidate);
 
-        // Re-index with updated data
-        searchService.indexCandidate(candidate);
+        // Re-index with updated data if available
+        if (searchService != null) {
+            try {
+                searchService.indexCandidate(candidate);
+            } catch (Exception e) {
+                log.warn("Failed to re-index candidate in search: {}", candidateId, e);
+            }
+        }
 
         log.info("Resume uploaded and parsed for candidate: {}", candidateId);
         return mapToResponse(candidate);
@@ -168,13 +185,23 @@ public class CandidateService {
 
     @Transactional(readOnly = true)
     public Page<CandidateResponse> listCandidates(UUID tenantId, CandidateStatus status, Pageable pageable) {
-        Page<Candidate> candidates;
-        if (status != null) {
-            candidates = candidateRepository.findByTenantIdAndStatus(tenantId, status, pageable);
-        } else {
-            candidates = candidateRepository.findByTenantId(tenantId, pageable);
+        try {
+            log.debug("Listing candidates for tenant: {}, status: {}, page: {}, size: {}", 
+                tenantId, status, pageable.getPageNumber(), pageable.getPageSize());
+            
+            Page<Candidate> candidates;
+            if (status != null) {
+                candidates = candidateRepository.findByTenantIdAndStatus(tenantId, status, pageable);
+            } else {
+                candidates = candidateRepository.findByTenantId(tenantId, pageable);
+            }
+            
+            log.debug("Found {} candidates", candidates.getTotalElements());
+            return candidates.map(this::mapToResponse);
+        } catch (Exception e) {
+            log.error("Error listing candidates for tenant: {}", tenantId, e);
+            throw e;
         }
-        return candidates.map(this::mapToResponse);
     }
 
     @Transactional
@@ -185,12 +212,24 @@ public class CandidateService {
                 .orElseThrow(() -> new RuntimeException("Candidate not found"));
 
         candidateRepository.delete(candidate);
-        searchService.deleteFromIndex(candidateId);
+        
+        // Delete from search index if available
+        if (searchService != null) {
+            try {
+                searchService.deleteFromIndex(candidateId);
+            } catch (Exception e) {
+                log.warn("Failed to delete candidate from search index: {}", candidateId, e);
+            }
+        }
 
         log.info("Candidate deleted: {}", candidateId);
     }
 
     private void publishCandidateEvent(String eventType, Candidate candidate) {
+        if (kafkaTemplate == null) {
+            log.debug("KafkaTemplate not available, skipping event publication: {}", eventType);
+            return;
+        }
         try {
             kafkaTemplate.send("talent.candidate.events", candidate.getId().toString(), Map.of(
                 "eventType", eventType,
@@ -206,45 +245,55 @@ public class CandidateService {
     }
 
     private CandidateResponse mapToResponse(Candidate candidate) {
-        return CandidateResponse.builder()
-                .id(candidate.getId())
-                .tenantId(candidate.getTenantId())
-                .firstName(candidate.getFirstName())
-                .lastName(candidate.getLastName())
-                .email(candidate.getEmail())
-                .phone(candidate.getPhone())
-                .location(candidate.getLocation())
-                .city(candidate.getCity())
-                .country(candidate.getCountry())
-                .status(candidate.getStatus())
-                .pipelineStage(candidate.getPipelineStage())
-                .source(candidate.getSource())
-                .referredBy(candidate.getReferredBy())
-                .summary(candidate.getSummary())
-                .yearsOfExperience(candidate.getYearsOfExperience())
-                .currentCompany(candidate.getCurrentCompany())
-                .currentPosition(candidate.getCurrentPosition())
-                .expectedSalary(candidate.getExpectedSalary())
-                .salaryCurrency(candidate.getSalaryCurrency())
-                .noticePeriodDays(candidate.getNoticePeriodDays())
-                .resumeData(candidate.getResumeData())
-                .skills(candidate.getSkills())
-                .education(candidate.getEducation())
-                .workExperience(candidate.getWorkExperience())
-                .certifications(candidate.getCertifications())
-                .languages(candidate.getLanguages())
-                .resumeUrl(candidate.getResumeUrl())
-                .linkedinUrl(candidate.getLinkedinUrl())
-                .githubUrl(candidate.getGithubUrl())
-                .portfolioUrl(candidate.getPortfolioUrl())
-                .isAvailable(candidate.getIsAvailable())
-                .isRemoteInterested(candidate.getIsRemoteInterested())
-                .isRelocationInterested(candidate.getIsRelocationInterested())
-                .rating(candidate.getRating())
-                .lastContactedAt(candidate.getLastContactedAt())
-                .createdAt(candidate.getCreatedAt())
-                .updatedAt(candidate.getUpdatedAt())
-                .build();
+        try {
+            if (candidate == null) {
+                log.error("Cannot map null candidate to response");
+                throw new IllegalArgumentException("Candidate cannot be null");
+            }
+            
+            return CandidateResponse.builder()
+                    .id(candidate.getId())
+                    .tenantId(candidate.getTenantId())
+                    .firstName(candidate.getFirstName())
+                    .lastName(candidate.getLastName())
+                    .email(candidate.getEmail())
+                    .phone(candidate.getPhone())
+                    .location(candidate.getLocation())
+                    .city(candidate.getCity())
+                    .country(candidate.getCountry())
+                    .status(candidate.getStatus())
+                    .pipelineStage(candidate.getPipelineStage())
+                    .source(candidate.getSource())
+                    .referredBy(candidate.getReferredBy())
+                    .summary(candidate.getSummary())
+                    .yearsOfExperience(candidate.getYearsOfExperience())
+                    .currentCompany(candidate.getCurrentCompany())
+                    .currentPosition(candidate.getCurrentPosition())
+                    .expectedSalary(candidate.getExpectedSalary())
+                    .salaryCurrency(candidate.getSalaryCurrency())
+                    .noticePeriodDays(candidate.getNoticePeriodDays())
+                    .resumeData(candidate.getResumeData())
+                    .skills(candidate.getSkills())
+                    .education(candidate.getEducation())
+                    .workExperience(candidate.getWorkExperience())
+                    .certifications(candidate.getCertifications())
+                    .languages(candidate.getLanguages())
+                    .resumeUrl(candidate.getResumeUrl())
+                    .linkedinUrl(candidate.getLinkedinUrl())
+                    .githubUrl(candidate.getGithubUrl())
+                    .portfolioUrl(candidate.getPortfolioUrl())
+                    .isAvailable(candidate.getIsAvailable())
+                    .isRemoteInterested(candidate.getIsRemoteInterested())
+                    .isRelocationInterested(candidate.getIsRelocationInterested())
+                    .rating(candidate.getRating())
+                    .lastContactedAt(candidate.getLastContactedAt())
+                    .createdAt(candidate.getCreatedAt())
+                    .updatedAt(candidate.getUpdatedAt())
+                    .build();
+        } catch (Exception e) {
+            log.error("Error mapping candidate to response: {}", candidate != null ? candidate.getId() : "null", e);
+            throw new RuntimeException("Failed to map candidate to response", e);
+        }
     }
 }
 
